@@ -1,0 +1,421 @@
+erDiagram
+    %% ============================================================
+    %% TAXIDENT — CLIENT ERD v2.1
+    %% Browser SQLite (wa-sqlite + OPFS / sql.js + IndexedDB)
+    %% ============================================================
+
+    %% --------------------------------------------------------
+    %% 0. LOCAL METADATA
+    %% --------------------------------------------------------
+
+    _sync_state {
+        TEXT vault_type PK
+        TEXT period_label PK
+        INTEGER local_version
+        INTEGER server_version
+        TEXT last_synced_at
+        INTEGER dirty
+    }
+
+    _reference_cache {
+        TEXT data_type PK
+        INTEGER cached_version
+        TEXT last_fetched_at
+    }
+
+    _device {
+        TEXT key PK
+        TEXT value
+    }
+
+    _scope_keys {
+        TEXT scope_name PK
+        TEXT derivation_path
+        INTEGER is_temporal
+        TEXT period_granularity
+        TEXT created_at
+    }
+
+    _advisor_grants_local {
+        TEXT server_grant_id PK
+        TEXT recipient_type "CHECK (advisor_id|opaque_token)"
+        TEXT recipient_label
+        TEXT advisor_account_id
+        TEXT opaque_token_hash
+        TEXT vault_type
+        TEXT period_label
+        TEXT start_offset
+        TEXT granted_at
+        TEXT expires_at
+        TEXT tombstoned_at
+        INTEGER rolling_window
+        INTEGER window_periods
+    }
+
+    %% --------------------------------------------------------
+    %% 0a. COUNTRIES CACHE
+    %% --------------------------------------------------------
+
+    _countries {
+        TEXT code PK "ISO 3166-1 alpha-2"
+        TEXT name
+        TEXT alpha3 UK "ISO 3166-1 alpha-3"
+        TEXT numeric_code
+        TEXT region
+        TEXT sub_region
+        INTEGER is_eu_member
+        INTEGER is_oecd_member
+        INTEGER has_dn_visa
+        TEXT updated_at
+    }
+
+    %% --------------------------------------------------------
+    %% 1. IDENTITY (non-temporal)
+    %% --------------------------------------------------------
+
+    nationalities {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT nationality_type "CHECK (citizen|permanent_resident|national)"
+        TEXT effective_from
+        TEXT effective_to
+        INTEGER citizenship_based_taxation
+        TEXT created_at
+    }
+
+    family_members {
+        TEXT id PK
+        TEXT relationship "CHECK (spouse|dependent|partner)"
+        TEXT display_name
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 2. PRESENCE DATA
+    %% --------------------------------------------------------
+
+    presence_intervals {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT sub_region
+        TEXT arrival_date
+        TEXT departure_date
+        TEXT source_type "CHECK (manual|csv|api|derived)"
+        TEXT confidence "CHECK (high|moderate|low)"
+        INTEGER user_override
+        TEXT override_reason
+        TEXT notes
+        TEXT period_label
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    family_presence {
+        TEXT id PK
+        TEXT family_member_id FK
+        TEXT country_code FK
+        TEXT arrival_date
+        TEXT departure_date
+        TEXT source_type "CHECK (manual|csv|api|derived)"
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 3. STATUS MODIFIERS
+    %% --------------------------------------------------------
+
+    visa_records {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT visa_type
+        TEXT visa_category "CHECK (work|tourist|investor|residence|other)"
+        TEXT valid_from
+        TEXT valid_to
+        INTEGER permits_employment
+        TEXT notes
+        TEXT period_label
+        TEXT created_at
+    }
+
+    tax_registrations {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT registration_type "CHECK (income_tax|social_security|vat|other)"
+        TEXT tax_identifier
+        TEXT effective_from
+        TEXT effective_to
+        TEXT status "CHECK (active|deregistered|pending)"
+        TEXT period_label
+        TEXT created_at
+    }
+
+    domicile_records {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT domicile_type "CHECK (domicile_of_origin|domicile_of_choice|deemed)"
+        TEXT effective_from
+        TEXT effective_to
+        TEXT basis
+        TEXT period_label
+        TEXT created_at
+    }
+
+    permanent_homes {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT address_summary
+        TEXT ownership_type "CHECK (owned|rented|available)"
+        TEXT available_from
+        TEXT available_to
+        INTEGER continuously_available
+        TEXT notes
+        TEXT period_label
+        TEXT created_at
+    }
+
+    employment_records {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT employer_name
+        TEXT employment_type "CHECK (employed|self_employed|director|govt_service)"
+        TEXT effective_from
+        TEXT effective_to
+        INTEGER government_service
+        TEXT notes
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 4. RESIDENCY EVENTS
+    %% --------------------------------------------------------
+
+    residency_events {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT event_type "CHECK (commence_residency|cease_residency)"
+        TEXT physical_date
+        TEXT legal_effective_date
+        TEXT basis
+        TEXT source "CHECK (user_asserted|system_derived|professional_advised)"
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 5. ASSERTIONS
+    %% --------------------------------------------------------
+
+    assertions {
+        TEXT id PK
+        TEXT rule_id
+        TEXT treaty_tiebreaker_step_id
+        TEXT jurisdiction_code FK
+        TEXT tax_year
+        TEXT factor_key
+        TEXT factor_value
+        TEXT user_statement
+        TEXT supporting_evidence
+        TEXT confidence "CHECK (high|moderate|low)"
+        INTEGER professional_reviewed
+        TEXT reviewer_notes
+        TEXT period_label
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    %% --------------------------------------------------------
+    %% 6. EVALUATION RESULTS
+    %% --------------------------------------------------------
+
+    evaluations {
+        TEXT id PK
+        TEXT jurisdiction_id
+        TEXT tax_year
+        TEXT determination "CHECK (resident|non_resident|indeterminate)"
+        TEXT confidence_basis "CHECK (mechanical_only|depends_on_assertions|requires_professional)"
+        INTEGER assertion_dependency_count
+        INTEGER unresolved_rule_count
+        TEXT summary
+        TEXT evaluated_at
+        TEXT period_label
+        TEXT created_at
+    }
+
+    rule_results {
+        TEXT id PK
+        TEXT evaluation_id FK
+        TEXT rule_id
+        TEXT result "CHECK (pass|fail|indeterminate)"
+        TEXT determination_type "CHECK (mechanical|structured_subjective|irreducibly_subjective)"
+        TEXT explanation
+        TEXT inputs_json
+        TEXT threshold_comparison
+        TEXT sensitivity_note
+        TEXT period_label
+        TEXT created_at
+    }
+
+    rule_result_assertions {
+        TEXT id PK
+        TEXT rule_result_id FK
+        TEXT assertion_id FK
+    }
+
+    factor_summaries {
+        TEXT id PK
+        TEXT evaluation_id FK
+        TEXT rule_id
+        TEXT factors_json
+        TEXT guidance_note
+        INTEGER professional_referral
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 7. TREATY EVALUATIONS
+    %% --------------------------------------------------------
+
+    treaty_evaluations {
+        TEXT id PK
+        TEXT evaluation_id FK
+        TEXT treaty_id
+        TEXT tax_year
+        TEXT country_a_code FK
+        TEXT country_b_code FK
+        TEXT final_resolution "CHECK (country_a|country_b|unresolved)"
+        INTEGER saving_clause_applied
+        TEXT saving_clause_note
+        TEXT summary
+        TEXT evaluated_at
+        TEXT period_label
+    }
+
+    treaty_step_results {
+        TEXT id PK
+        TEXT treaty_evaluation_id FK
+        TEXT treaty_tiebreaker_step_id
+        INTEGER step_order
+        TEXT result "CHECK (resolved_to_a|resolved_to_b|inconclusive|not_evaluated)"
+        TEXT reasoning
+        TEXT inputs_json
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 8. DERIVED DAY COUNTS
+    %% --------------------------------------------------------
+
+    day_counts {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT sub_region
+        TEXT period_type "CHECK (calendar_year|rolling_12m|lookback_weighted|custom)"
+        TEXT period_start
+        TEXT period_end
+        INTEGER total_days
+        INTEGER deemed_days
+        INTEGER partial_day_adjustments
+        TEXT calculation_method "CHECK (midnight|24hr|jurisdiction_specific)"
+        TEXT computed_at
+        TEXT period_label
+    }
+
+    %% --------------------------------------------------------
+    %% 9. RISK & PROJECTIONS
+    %% --------------------------------------------------------
+
+    risk_alerts {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT rule_id
+        TEXT alert_type "CHECK (threshold_proximity|status_change|treaty_conflict)"
+        TEXT severity "CHECK (info|warning|critical)"
+        TEXT message
+        INTEGER days_to_threshold
+        TEXT projected_trigger_date
+        INTEGER acknowledged
+        TEXT period_label
+        TEXT created_at
+    }
+
+    simulations {
+        TEXT id PK
+        TEXT scenario_name
+        TEXT parameters_json
+        TEXT results_json
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 10. AUDIT LOG
+    %% --------------------------------------------------------
+
+    audit_log {
+        TEXT id PK
+        TEXT entity_type
+        TEXT entity_id
+        TEXT action "CHECK (create|update|delete|override|evaluate)"
+        TEXT changes_json
+        TEXT reason
+        TEXT period_label
+        TEXT created_at
+    }
+
+    %% ============================================================
+    %% RELATIONSHIPS
+    %% ============================================================
+
+    %% Countries FK (new in v2.1)
+    _countries ||--o{ nationalities : "citizenship of"
+    _countries ||--o{ presence_intervals : "present in"
+    _countries ||--o{ family_presence : "present in"
+    _countries ||--o{ visa_records : "visa for"
+    _countries ||--o{ tax_registrations : "registered in"
+    _countries ||--o{ domicile_records : "domiciled in"
+    _countries ||--o{ permanent_homes : "home in"
+    _countries ||--o{ employment_records : "employed in"
+    _countries ||--o{ residency_events : "residency in"
+    _countries ||--o{ assertions : "jurisdiction"
+    _countries ||--o{ treaty_evaluations : "country_a"
+    _countries ||--o{ treaty_evaluations : "country_b"
+    _countries ||--o{ day_counts : "counted in"
+    _countries ||--o{ risk_alerts : "alert for"
+
+    %% Identity
+    family_members ||--o{ family_presence : "tracked in"
+
+    %% Evaluation chain
+    evaluations ||--o{ rule_results : "produces"
+    evaluations ||--o{ factor_summaries : "summarises"
+    rule_results ||--o{ rule_result_assertions : "depends on"
+    assertions ||--o{ rule_result_assertions : "supports"
+
+    %% Treaty evaluation chain
+    evaluations ||--o{ treaty_evaluations : "triggers"
+    treaty_evaluations ||--o{ treaty_step_results : "resolved via"
+
+    %% Scope key drives period labelling
+    _scope_keys ||--o{ _sync_state : "syncs per scope"
+    _scope_keys ||--o{ _advisor_grants_local : "grants per scope"
+
+    %% Period label groupings (logical, not FK)
+    presence_intervals }o--o| _sync_state : "period sync"
+    family_presence }o--o| _sync_state : "period sync"
+    visa_records }o--o| _sync_state : "period sync"
+    tax_registrations }o--o| _sync_state : "period sync"
+    domicile_records }o--o| _sync_state : "period sync"
+    permanent_homes }o--o| _sync_state : "period sync"
+    employment_records }o--o| _sync_state : "period sync"
+    residency_events }o--o| _sync_state : "period sync"
+    assertions }o--o| _sync_state : "period sync"
+    evaluations }o--o| _sync_state : "period sync"
+    treaty_evaluations }o--o| _sync_state : "period sync"
+    day_counts }o--o| _sync_state : "period sync"
+    risk_alerts }o--o| _sync_state : "period sync"
+    simulations }o--o| _sync_state : "period sync"
+    audit_log }o--o| _sync_state : "period sync"

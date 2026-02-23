@@ -1,0 +1,315 @@
+erDiagram
+    %% ============================================================
+    %% TAXIDENT — SERVER ERD v3.1
+    %% Zero-Knowledge Encrypted Storage + Per-Record Encryption
+    %% ============================================================
+
+    %% --------------------------------------------------------
+    %% 1. ACCOUNTS & AUTHENTICATION
+    %% --------------------------------------------------------
+
+    accounts {
+        TEXT id PK
+        TEXT account_fingerprint UK
+        TIMESTAMP created_at
+        TIMESTAMP last_seen_at
+    }
+
+    webauthn_credentials {
+        TEXT id PK
+        TEXT account_id FK
+        TEXT credential_id UK
+        TEXT public_key
+        INTEGER sign_count
+        TEXT transports
+        TEXT device_name
+        TIMESTAMP created_at
+        TIMESTAMP last_used_at
+    }
+
+    recovery_verifiers {
+        TEXT id PK
+        TEXT account_id FK "UNIQUE"
+        TEXT verifier_hash
+        TEXT algorithm
+        TIMESTAMP created_at
+    }
+
+    auth_challenges {
+        TEXT id PK
+        TEXT challenge UK
+        TEXT challenge_type "CHECK (registration|authentication|recovery)"
+        TEXT account_id
+        TIMESTAMP created_at
+        TIMESTAMP expires_at
+    }
+
+    %% --------------------------------------------------------
+    %% 2. LOOKUP TABLES
+    %% --------------------------------------------------------
+
+    countries {
+        TEXT code PK "ISO 3166-1 alpha-2"
+        TEXT name
+        TEXT alpha3 UK "ISO 3166-1 alpha-3"
+        TEXT numeric_code
+        TEXT region
+        TEXT sub_region
+        INTEGER is_eu_member
+        INTEGER is_oecd_member
+        INTEGER has_dn_visa
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    vault_types {
+        TEXT id PK
+        TEXT display_name
+        INTEGER is_temporal
+        TEXT description
+        TIMESTAMP created_at
+    }
+
+    crypto_algorithms {
+        TEXT id PK
+        TEXT algorithm_type "CHECK (symmetric|asymmetric|wrapping|kdf)"
+        TEXT display_name
+        INTEGER key_bits
+        INTEGER nonce_bits
+        INTEGER webcrypto_native
+        TEXT library
+        TEXT notes
+        TIMESTAMP created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 3. ENCRYPTED RECORDS
+    %% --------------------------------------------------------
+
+    encrypted_records {
+        TEXT id PK
+        TEXT account_id FK
+        TEXT vault_type_id FK
+        TEXT period_label
+        TEXT record_date
+        TEXT encrypted_payload
+        TEXT nonce
+        TEXT encryption_algo_id FK "DEFAULT aes-256-gcm"
+        INTEGER data_version
+        INTEGER size_bytes
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    record_history {
+        TEXT id PK
+        TEXT record_id FK
+        INTEGER data_version
+        TEXT encrypted_payload
+        TEXT nonce
+        TIMESTAMP created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 4. ADVISOR ACCOUNTS & KYC
+    %% --------------------------------------------------------
+
+    advisor_accounts {
+        TEXT id PK
+        TEXT account_id FK "UNIQUE"
+        TEXT delegation_public_key
+        TEXT kyc_status "CHECK (pending|submitted|verified|rejected|suspended)"
+        TIMESTAMP kyc_verified_at
+        TEXT kyc_reference
+        TEXT display_name_encrypted
+        TEXT jurisdiction_tags
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    %% --------------------------------------------------------
+    %% 5. ADVISOR GRANTS
+    %% --------------------------------------------------------
+
+    advisor_grants {
+        TEXT id PK
+        TEXT account_id FK
+        TEXT recipient_type "CHECK (advisor_id|opaque_token)"
+        TEXT advisor_account_id FK
+        TEXT opaque_token
+        TEXT vault_type_id FK
+        TEXT period_label
+        TEXT wrapped_period_key
+        TEXT wrapping_algo_id FK "DEFAULT x25519-xsalsa20-poly1305"
+        TEXT start_offset
+        TIMESTAMP granted_at
+        TIMESTAMP expires_at
+        TIMESTAMP tombstoned_at
+    }
+
+    %% --------------------------------------------------------
+    %% 6. ADVISOR WORKSPACE (STUB)
+    %% --------------------------------------------------------
+
+    advisor_workspace_messages {
+        TEXT id PK
+        TEXT grant_id FK
+        TEXT sender_type "CHECK (user|advisor)"
+        TEXT encrypted_payload
+        TEXT nonce
+        TEXT encryption_algo_id FK "DEFAULT aes-256-gcm"
+        TEXT payload_type "CHECK (message|document|annotation)"
+        TIMESTAMP created_at
+    }
+
+    %% --------------------------------------------------------
+    %% 7. PUBLIC REFERENCE DATA
+    %% --------------------------------------------------------
+
+    jurisdictions {
+        TEXT id PK
+        TEXT country_code FK
+        TEXT country_name
+        TEXT sub_region
+        TEXT tax_year_type "CHECK (calendar|fiscal|custom)"
+        TEXT tax_year_start
+        TEXT notes
+    }
+
+    rulesets {
+        TEXT id PK
+        TEXT jurisdiction_id FK
+        INTEGER version
+        DATE effective_from
+        DATE effective_to
+        TEXT status "CHECK (draft|active|superseded)"
+        TEXT author
+        TEXT change_notes
+        TIMESTAMP created_at
+    }
+
+    rules {
+        TEXT id PK
+        TEXT ruleset_id FK
+        TEXT rule_code
+        TEXT rule_name
+        TEXT description
+        TEXT determination_type "CHECK (mechanical|structured_subjective|irreducibly_subjective)"
+        TEXT authority_type "CHECK (statute|regulation|admin_guidance|case_law)"
+        TEXT authority_reference
+        INTEGER evaluation_order
+        TEXT rule_logic_ref
+        TEXT output_template
+        TEXT notes
+        TIMESTAMP created_at
+    }
+
+    rule_parameters {
+        TEXT id PK
+        TEXT rule_id FK
+        TEXT param_key
+        TEXT param_value
+        TEXT param_type "CHECK (integer|boolean|text|date|decimal)"
+        TEXT description
+    }
+
+    treaties {
+        TEXT id PK
+        TEXT country_a_code FK
+        TEXT country_b_code FK
+        TEXT treaty_name
+        DATE effective_from
+        DATE effective_to
+        INTEGER country_a_saving_clause
+        INTEGER country_b_saving_clause
+        TEXT treaty_reference
+        TEXT notes
+        TIMESTAMP created_at
+    }
+
+    treaty_tiebreaker_steps {
+        TEXT id PK
+        TEXT treaty_id FK
+        INTEGER step_order
+        TEXT test_name "CHECK (permanent_home|vital_interests|habitual_abode|nationality|mutual_agreement)"
+        TEXT determination_type "CHECK (mechanical|structured_subjective|irreducibly_subjective)"
+        TEXT rule_logic_ref
+        TEXT description
+    }
+
+    %% --------------------------------------------------------
+    %% 8. REFERENCE DATA VERSIONING
+    %% --------------------------------------------------------
+
+    reference_data_versions {
+        TEXT id PK
+        TEXT data_type UK "CHECK (countries|jurisdictions|rulesets|rules|treaties)"
+        INTEGER current_version
+        TIMESTAMP updated_at
+    }
+
+    %% --------------------------------------------------------
+    %% 9. SYNC METADATA
+    %% --------------------------------------------------------
+
+    sync_cursors {
+        TEXT id PK
+        TEXT account_id FK
+        TEXT device_id
+        TEXT vault_type_id FK
+        TEXT period_label
+        TIMESTAMP last_synced_at
+        INTEGER last_version
+    }
+
+    %% --------------------------------------------------------
+    %% 10. RATE LIMITING
+    %% --------------------------------------------------------
+
+    rate_limit_events {
+        TEXT id PK
+        TEXT account_id
+        TEXT ip_hash
+        TEXT event_type "CHECK (auth_attempt|vault_write|recovery_attempt|api_call)"
+        TIMESTAMP created_at
+    }
+
+    %% ============================================================
+    %% RELATIONSHIPS
+    %% ============================================================
+
+    %% Auth
+    accounts ||--o{ webauthn_credentials : "authenticates via"
+    accounts ||--o| recovery_verifiers : "recovers via"
+    accounts ||--o{ auth_challenges : "challenges"
+
+    %% Encrypted records
+    accounts ||--o{ encrypted_records : "owns"
+    vault_types ||--o{ encrypted_records : "categorises"
+    crypto_algorithms ||--o{ encrypted_records : "encrypts with"
+    encrypted_records ||--o{ record_history : "versioned as"
+
+    %% Advisor
+    accounts ||--o| advisor_accounts : "is advisor"
+    accounts ||--o{ advisor_grants : "grants access"
+    advisor_accounts ||--o{ advisor_grants : "receives grants"
+    vault_types ||--o{ advisor_grants : "scoped to"
+    crypto_algorithms ||--o{ advisor_grants : "wraps with"
+    advisor_grants ||--o{ advisor_workspace_messages : "messages within"
+    crypto_algorithms ||--o{ advisor_workspace_messages : "encrypts with"
+
+    %% Reference data
+    countries ||--o{ jurisdictions : "located in"
+    jurisdictions ||--o{ rulesets : "governed by"
+    rulesets ||--o{ rules : "contains"
+    rules ||--o{ rule_parameters : "parameterised by"
+    countries ||--o{ treaties : "country_a"
+    countries ||--o{ treaties : "country_b"
+    treaties ||--o{ treaty_tiebreaker_steps : "resolved via"
+
+    %% Sync
+    accounts ||--o{ sync_cursors : "syncs via"
+    vault_types ||--o{ sync_cursors : "tracks"
+
+    %% Rate limiting
+    accounts ||--o{ rate_limit_events : "throttled by"
